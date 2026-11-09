@@ -1,6 +1,6 @@
 {
   "name": "dsh-us-stocks",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "美股行情 + 知识库 + 财报日历 + 技术指标 + 提醒 + 智能问答 + 组合与对比的 DSH 插件：日线收盘行情、指数概览、自选股、K 线图与基本面，覆盖股票小白到深度投资者。",
   "type": "module",
   "main": "index.js",

@@ -127,9 +127,18 @@ function cacheSet(key, value, ttlMs) {
 // ---------------------------------------------------------------------------
 
 async function fetchJson(url, headers = {}) {
-  const res = await fetch(url, { headers: { 'user-agent': UA, ...headers } })
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`)
-  return res.json()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 8000)
+  try {
+    const res = await fetch(url, {
+      headers: { 'user-agent': UA, ...headers },
+      signal: controller.signal,
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`)
+    return await res.json()
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 /** "$342.37" / "44,703,810" / "+1.09%" -> number | null */
@@ -301,6 +310,9 @@ const MARKET_HOLIDAYS = new Set([
   '2026-06-19', '2026-07-03', '2026-09-07', '2026-11-26', '2026-12-25',
   '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26', '2027-05-31',
   '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24',
+  '2027-12-31',
+  '2028-01-17', '2028-02-21', '2028-04-14', '2028-05-29', '2028-06-19',
+  '2028-07-04', '2028-09-04', '2028-11-23', '2028-12-25',
 ])
 
 /** 盘前 / 开盘 / 收盘 / 盘后 对应的 ET 分钟数。 */
@@ -559,6 +571,25 @@ function isLocal(request) {
   )
 }
 
+/** 写接口的额外校验：本机 + JSON content-type + 同源，降低 CSRF 风险。 */
+function isTrustedWrite(request) {
+  if (!isLocal(request)) return false
+  const type = request.headers['content-type'] ?? ''
+  if (!type.includes('application/json')) return false
+  const site = request.headers['sec-fetch-site']
+  if (site && site !== 'same-origin') return false
+  const origin = request.headers.origin
+  if (origin) {
+    try {
+      const host = new URL(origin).hostname
+      if (!['127.0.0.1', 'localhost', '::1'].includes(host)) return false
+    } catch {
+      return false
+    }
+  }
+  return true
+}
+
 /** 统一包一层：带 fetchedAt 与错误信息，便于前端降级。 */
 function withStamp(handler) {
   return async (request, response) => {
@@ -587,14 +618,15 @@ async function evaluateDueAlerts() {
   for (const alert of alerts) {
     try {
       if (alert.type === 'market') {
-        // 开收盘提醒按日重复：同一天只触发一次
+        // 开收盘提醒按日重复：同一天只触发一次；给 5 分钟宽限，避免轮询跨分钟漏触发
         const targetMinutes = SESSION_MINUTES[alert.event]
         if (targetMinutes == null) continue
-        const target = targetMinutes - (Number(alert.offsetMinutes) || 0)
+        const offset = Math.min(Math.max(Number(alert.offsetMinutes) || 0, 0), targetMinutes)
+        const target = targetMinutes - offset
         const inWindow =
           clock.isTradingDay &&
           clock.minutesSinceMidnight >= target &&
-          clock.minutesSinceMidnight <= targetMinutes
+          clock.minutesSinceMidnight <= targetMinutes + 5
         if (inWindow && alert.lastFiredDate !== clock.date) {
           alert.lastFiredDate = clock.date
           alert.firedAt = now
@@ -664,7 +696,8 @@ function normalizeQuestion(text) {
 const TICKER_STOPWORDS = new Set([
   'PE', 'PB', 'PS', 'PEG', 'EPS', 'ROE', 'FCF', 'ETF', 'ADR', 'IPO', 'RSI', 'MACD',
   'BOLL', 'MA', 'EMA', 'IV', 'TTM', 'YOY', 'QOQ', 'YTD', 'DPS', 'SEC', 'VIX', 'AH',
-  'PM', 'HOD', 'LOD', 'DST',
+  'PM', 'HOD', 'LOD', 'DST', 'US', 'USA', 'CN', 'AI', 'OK', 'ALL', 'NEW', 'ONE',
+  'CEO', 'CFO', 'USD', 'GDP', 'CPI', 'FED',
 ])
 
 const KNOWN_TICKERS = [
@@ -674,13 +707,30 @@ const KNOWN_TICKERS = [
 ]
 
 function detectSymbol(text) {
-  const upper = String(text ?? '').toUpperCase()
+  const raw = String(text ?? '')
+  const upper = raw.toUpperCase()
   for (const symbol of KNOWN_TICKERS) {
     if (new RegExp(`(^|[^A-Z])${symbol}([^A-Z]|$)`).test(upper)) return symbol
   }
-  const match = upper.match(/\b([A-Z]{2,5})\b/)
-  if (match && !TICKER_STOPWORDS.has(match[1])) return match[1]
+  // 仅当用户原文里出现大写 ticker（如 AAPL / $TSLA）时才兜底，避免把 "US"/"AI" 等当代码
+  const explicit = raw.match(/\$?([A-Z]{2,5})\b/)
+  if (explicit && !TICKER_STOPWORDS.has(explicit[1])) return explicit[1]
   return null
+}
+
+/** 查某代码最近的财报日（带缓存，默认未来 14 天）。 */
+async function nextEarnings(symbol, days = 14) {
+  const key = `earnings:${String(symbol).toUpperCase()}:${days}`
+  const cached = cacheGet(key)
+  if (cached !== undefined) return cached
+  const today = new Date().toISOString().slice(0, 10)
+  const dates = dateRange(today, addDays(today, days))
+  const lists = await Promise.all(dates.map((date) => nasdaqEarningsCalendar(date).catch(() => [])))
+  const target = String(symbol).toUpperCase()
+  const hit = lists.flat().find((row) => String(row.symbol).toUpperCase() === target)
+  const result = hit ?? null
+  cacheSet(key, result, 60 * 60 * 1000)
+  return result
 }
 
 async function answerQuestion(text) {
@@ -740,16 +790,13 @@ async function answerQuestion(text) {
 
   if (symbol && has(['财报', '业绩', 'earnings', '发财报', '财报日期', '什么时候财报'])) {
     try {
-      const today = new Date().toISOString().slice(0, 10)
-      const dates = dateRange(today, addDays(today, 30))
-      const lists = await Promise.all(dates.map((date) => nasdaqEarningsCalendar(date).catch(() => [])))
-      const hit = lists.flat().find((row) => String(row.symbol).toUpperCase() === symbol)
+      const hit = await nextEarnings(symbol, 14)
       return {
         type: 'earnings',
         symbol,
         text: hit
           ? `${symbol} 下一次财报：${hit.date}（${hit.time === 'time-pre-market' ? '盘前' : hit.time === 'time-after-hours' ? '盘后' : '时间未定'}），预期 EPS ${hit.epsForecast ?? '—'}。`
-          : `未来 30 天未查到 ${symbol} 的财报日程（可能已过或尚未公布）。`,
+          : `未来 14 天未查到 ${symbol} 的财报日程（可能已过或尚未公布）。`,
         sources: [{ label: 'Nasdaq Calendar', url: 'https://www.nasdaq.com/market-activity/earnings' }],
       }
     } catch (error) {
@@ -980,7 +1027,7 @@ const handlers = [
         sendJson(response, 405, { error: `method not allowed: ${request.method}` })
         return
       }
-      if (!isLocal(request)) {
+      if (!isTrustedWrite(request)) {
         sendJson(response, 403, { error: 'local-only' })
         return
       }
@@ -1001,7 +1048,7 @@ const handlers = [
           earningsDate: input.earningsDate ?? null,
           daysBefore: Number(input.daysBefore) || 0,
           event: ['pre', 'open', 'close', 'after'].includes(input.event) ? input.event : 'open',
-          offsetMinutes: Number(input.offsetMinutes) || 0,
+          offsetMinutes: Math.min(Math.max(Number(input.offsetMinutes) || 0, 0), 720),
           createdAt: Date.now(),
           firedAt: null,
         }
@@ -1050,8 +1097,13 @@ const handlers = [
         .filter(Boolean)
         .slice(0, 8)
       if (!list.length) return { items: [] }
+      const key = `compare:${[...new Set(list)].sort().join(',')}`
+      const cached = cacheGet(key)
+      if (cached) return cached
       const items = await compareSymbols(list)
-      return { items }
+      const payload = { items }
+      cacheSet(key, payload, 10 * 60 * 1000)
+      return payload
     }),
   },
   {
@@ -1069,7 +1121,7 @@ const handlers = [
         sendJson(response, 405, { error: `method not allowed: ${request.method}` })
         return
       }
-      if (!isLocal(request)) {
+      if (!isTrustedWrite(request)) {
         sendJson(response, 403, { error: 'local-only' })
         return
       }
@@ -1125,7 +1177,7 @@ const handlers = [
         sendJson(response, 405, { error: `method not allowed: ${request.method}` })
         return
       }
-      if (!isLocal(request)) {
+      if (!isTrustedWrite(request)) {
         sendJson(response, 403, { error: 'local-only' })
         return
       }
@@ -1162,7 +1214,7 @@ const handlers = [
         sendJson(response, 405, { error: `method not allowed: ${request.method}` })
         return
       }
-      if (!isLocal(request)) {
+      if (!isTrustedWrite(request)) {
         sendJson(response, 403, { error: 'local-only' })
         return
       }

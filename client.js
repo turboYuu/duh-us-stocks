@@ -14,7 +14,7 @@ window.__ModuleLoader__.load({
     const NS = 'us-stocks';
     const PANEL_ID = 'us-stocks';
     const PACKAGE_NAME = 'dsh-us-stocks';
-    const VERSION = '0.6.1';
+    const VERSION = '0.6.2';
     const API = '/api/us-stocks';
 
     const en = {
@@ -739,7 +739,7 @@ window.__ModuleLoader__.load({
           window.removeEventListener('resize', onResize);
           chart.remove();
         };
-      }, [useLib, candles, colorScheme, indicators]);
+      }, [useLib, candles, colorScheme, indicators.ma, indicators.boll]);
 
       if (!usable) return h('p', { className: 'us-muted', style: { padding: '32px 0' } }, ' ');
       return useLib ? h('div', { className: 'us-chart', ref }) : h(SvgChart, { candles, colorScheme });
@@ -1532,7 +1532,7 @@ window.__ModuleLoader__.load({
                 h('div', { className: 'us-detail-head' },
                   h('span', { className: 'us-detail-sym' }, detail.symbol),
                   h('span', { className: 'us-detail-price' }, fmtPrice(detail.price)),
-                  h('span', { className: detail.change >= 0 ? 'us-up' : 'us-down' },
+                  h('span', { className: detail.change != null && detail.change >= 0 ? 'us-up' : 'us-down' },
                     `${fmtSigned(detail.change)} (${fmtSigned(detail.changePercent, '%')})`),
                   detail.fetchedAt && h('span', { className: 'us-muted' },
                     new Date(detail.fetchedAt * 1000).toLocaleString()),
@@ -1590,9 +1590,11 @@ window.__ModuleLoader__.load({
             ? h('p', { className: 'us-muted' }, t('alert.empty'))
             : alerts.map((alert) => h('div', { className: 'us-alert-row', key: alert.id },
                 h('span', { className: 'us-alert-text' },
-                  alert.type === 'price'
-                    ? `${alert.symbol} · ${t('alert.priceAlert')} ${alert.condition === 'below' ? '≤' : '≥'} ${fmtPrice(alert.price)}`
-                    : `${alert.symbol} · ${t('alert.earningsAlert')} ${alert.earningsDate}`),
+                  alert.type === 'market'
+                    ? `${t('alert.marketLabel')}：${t(`alert.event.${alert.event}`)}`
+                    : alert.type === 'earnings'
+                      ? `${alert.symbol} · ${t('alert.earningsAlert')} ${alert.earningsDate}`
+                      : `${alert.symbol} · ${t('alert.priceAlert')} ${alert.condition === 'below' ? '≤' : '≥'} ${fmtPrice(alert.price)}`),
                 h('button', { className: 'us-button us-button-ghost', type: 'button', onClick: () => removeAlert(alert.id) }, t('alert.delete')),
               )),
         ),
