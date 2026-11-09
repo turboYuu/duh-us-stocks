@@ -1,0 +1,75 @@
+{
+  "name": "dsh-us-stocks",
+  "version": "0.6.1",
+  "description": "美股行情 + 知识库 + 财报日历 + 技术指标 + 提醒 + 智能问答 + 组合与对比的 DSH 插件：日线收盘行情、指数概览、自选股、K 线图与基本面，覆盖股票小白到深度投资者。",
+  "type": "module",
+  "main": "index.js",
+  "icon": "icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./icon": "./icon.svg",
+    "./locale/en.json": "./locale/en.json",
+    "./locale/zh.json": "./locale/zh.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "locale/*.json",
+    "knowledge/*.js"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "react": ">=18.2.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "lightweight-charts": "^4.2.3"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "us-stocks",
+    "stock",
+    "finance",
+    "candlestick",
+    "kline"
+  ],
+  "license": "MIT",
+  "author": "dsh-us-stocks contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/turboYuu/dsh-us-stocks.git"
+  },
+  "bugs": {
+    "url": "https://github.com/turboYuu/dsh-us-stocks/issues"
+  },
+  "homepage": "https://github.com/turboYuu/dsh-us-stocks#readme",
+  "engines": {
+    "node": ">=18"
+  }
+}

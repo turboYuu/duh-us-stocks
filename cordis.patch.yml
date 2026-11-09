@@ -1,0 +1,6 @@
+# 美股插件 bundle：一条宿主行。
+# 宿主半负责数据代理（Yahoo/Finnhub/EDGAR）与自选/偏好持久化；
+# 浏览器半（package.json 的 dsh.client 声明）负责侧栏入口、面板、K 线图与基本面。
+- insert:
+    - id: us-stocks
+      name: 'dsh-us-stocks'
