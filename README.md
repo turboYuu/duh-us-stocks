@@ -141,7 +141,29 @@ $DSH_HOME/dsh-us-stocks.json
 - Node.js ≥ 18（用于安装依赖）
 - 可访问 `api.nasdaq.com`、`push2.eastmoney.com` 的网络
 
-### 方式一：从 GitHub 克隆（推荐，开源版）
+### 方式一：用 DSH 插件管理器安装（推荐）
+
+DSH 插件管理器通过一个 **package spec** 安装插件，支持下面几种写法：
+
+| spec 类型 | 示例 |
+| --- | --- |
+| Git 仓库地址 | `git+https://github.com/turboYuu/dsh-us-stocks.git` |
+| GitHub 简写 | `github:turboYuu/dsh-us-stocks` |
+| 托管仓库 URL | `https://github.com/turboYuu/dsh-us-stocks` |
+| npm 包名（若已发布） | `dsh-us-stocks` |
+| 本地绝对路径 | `/Users/you/plugins/dsh-us-stocks` |
+| tarball | `/path/to/dsh-us-stocks-0.6.2.tgz` |
+
+步骤：
+
+1. 打开 DSH → **插件管理**。
+2. 点「**安装**」，在输入框填入上面的 spec（推荐 Git 地址）。
+3. 确认后 DSH 会自动用 pnpm 拉取代码并安装依赖（含 `lightweight-charts`）。
+4. 安装完成 → **启用**插件 → 刷新页面。
+
+> 若插件已收录进 DSH 插件市场索引，也可直接在「插件市场」中搜索 `dsh-us-stocks` 安装。
+
+### 方式二：从 GitHub 克隆（手动，开发 / 自用）
 
 ```bash
 git clone https://github.com/turboYuu/dsh-us-stocks.git
@@ -149,25 +171,21 @@ cd dsh-us-stocks
 npm install          # 拉取 lightweight-charts
 ```
 
-然后在 DSH 中：打开 **插件管理 → 加载本地插件 → 选择 `dsh-us-stocks` 目录**。
+然后在 DSH 中：打开 **插件管理 → 加载本地插件 → 选择 `dsh-us-stocks` 目录**（或把该目录的绝对路径作为 spec 安装）。
 
-### 方式二：下载 ZIP（无需 Git）
+### 方式三：下载 ZIP（无需 Git）
 
 1. 打开仓库页面 <https://github.com/turboYuu/dsh-us-stocks>。
 2. 点击 **Code → Download ZIP**，解压到任意目录。
 3. `cd` 进解压目录执行 `npm install`。
 4. DSH 插件管理 → 加载本地插件 → 选择该目录。
 
-### 方式三：npm 安装（若已发布）
+### 方式四：npm 安装（若已发布）
 
 ```bash
 npm install -g dsh-us-stocks
 # 或在 DSH 插件管理中输入包名 dsh-us-stocks 安装
 ```
-
-### 方式四：插件市场
-
-若已收录进 DSH 插件市场索引，可在「插件市场」中搜索 `dsh-us-stocks` 安装。
 
 ### 加载后
 
